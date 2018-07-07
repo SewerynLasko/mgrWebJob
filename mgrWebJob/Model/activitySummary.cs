@@ -2,7 +2,7 @@
 
 namespace mgrWebJob
 {
-    class activitySummary
+    class ActivitySummary
     {
         [JsonProperty("startTimeInSeconds")]
         public int startTimeInSeconds { get; set; }
@@ -16,13 +16,7 @@ namespace mgrWebJob
         [JsonProperty("maxHeartRateInBeatsPerMinute")]
         public float maxHeartRateInBeatsPerMinute { get; set; }
 
-        //[JsonProperty("temperature")]
-        //public int temperature { get; set; }
-
-        //[JsonProperty("rating")]
-        //public int rating { get; set; }
-
-        public activitySummary()
+        public ActivitySummary()
         {
             startTimeInSeconds = 0;
             durationInSeconds = 0;

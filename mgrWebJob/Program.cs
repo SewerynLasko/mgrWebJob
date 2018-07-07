@@ -32,11 +32,36 @@ namespace mgrWebJob
             }
 
             getDatesAndConvertToUnixTimestamp();
-            getAndSaveSleepData();
+            //getAndSaveSleepData();
+            getAndSaveActivityData();
 
             // var host = new JobHost(config);
             // The following code ensures that the WebJob will be running continuously
             //host.RunAndBlock();
+        }
+
+        static void getAndSaveActivityData()
+        {
+            WebRequest request = requestGenerator("activities", 1530594000, 1530648000);
+            // Send request and get response
+            var response = request.GetResponse();
+            ActivitySummary activitySummary = new ActivitySummary();
+            using (System.IO.StreamReader sr = new System.IO.StreamReader(response.GetResponseStream()))
+            {
+                string myJsonResponse = sr.ReadToEnd();
+
+                //Deserialize response and capture relevant data
+                var activitySummaryJson = JsonConvert.DeserializeObject<JArray>(myJsonResponse).First.ToString();
+                activitySummary = JsonConvert.DeserializeObject<ActivitySummary>(activitySummaryJson);
+            }
+
+            SqlCommand cmd = new SqlCommand();
+            cmd.CommandText = @"INSERT INTO dbo.GarminData(BikingStartTime, BikingDurationInSec, BikingAvgHeartRate, BikingMaxHeartRate) VALUES (@bikingStartTime, @bikingDurationInSec, @bikingAvgHeartRate, @bikingMaxHeartRate)";
+            cmd.Parameters.AddWithValue("@bikingStartTime", UnixTimeStampToDateTime(activitySummary.startTimeInSeconds).ToString("HH:mm"));
+            cmd.Parameters.AddWithValue("@bikingDurationInSec", activitySummary.durationInSeconds);
+            cmd.Parameters.AddWithValue("@bikingAvgHeartRate", activitySummary.averageHeartRateInBeatsPerMinute);
+            cmd.Parameters.AddWithValue("@bikingMaxHeartRate", activitySummary.maxHeartRateInBeatsPerMinute);
+            executeNonQuery(cmd);
         }
 
         static void getAndSaveSleepData()
@@ -145,6 +170,14 @@ namespace mgrWebJob
             requestedDate = currentDate.Date;
             requestedDate = requestedDate.Date + requestredHour;
             trainingTimeEnd = (Int32)(requestedDate.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
+        }
+
+        public static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
+        {
+            // Unix timestamp is seconds past epoch
+            DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
+            dtDateTime = dtDateTime.AddSeconds(unixTimeStamp).ToLocalTime();
+            return dtDateTime;
         }
     }
 }

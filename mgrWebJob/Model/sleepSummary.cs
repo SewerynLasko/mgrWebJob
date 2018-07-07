@@ -2,7 +2,7 @@
 
 namespace mgrWebJob
 {
-    class sleepSummary
+    class SleepSummary
     {
         [JsonProperty("calendarDate")]
         public string calendarDate { get; set; }
@@ -22,7 +22,7 @@ namespace mgrWebJob
         [JsonProperty("awakeDurationInSeconds")]
         public int awakeDurationInSeconds { get; set; }
 
-        public sleepSummary()
+        public SleepSummary()
         {
             calendarDate = "";
             durationInSeconds = 0;

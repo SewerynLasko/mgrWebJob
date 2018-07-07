@@ -81,7 +81,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="Engine\Functions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Model\sleepSummary.cs" />
+    <Compile Include="Model\SleepSummary.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

@@ -4,6 +4,8 @@ using OAuth;
 using System.Net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Data.SqlClient;
+using System.Data;
 
 namespace mgrWebJob
 {
@@ -19,6 +21,10 @@ namespace mgrWebJob
         public static string CONSUMER_SECRET = "QicVJ03lzjkwXWDW7FyVpXijV6FNOYLnNRb"; //APPLICATION_PASSWORD
         public static string USER_ACCESS_TOKEN = "a6352297-0593-49b9-ab13-5c3a29a50d6a"; //USER_TOKEN
         public static string USER_ACCESS_TOKEN_SECRET = "iXzP9riRMnTRKmfAqD6XZUTDpJD6ulfOSj4"; // USER_TOKEN_PASSWORD
+
+        public static string AZURE_DATABASE_CONN_STRING = "Server=tcp:mgrsewerynlaskodbserver.database.windows.net,1433;Initial Catalog=mgrsewerynlasko_db;Persist Security Info=False;User ID=mgrsewerynlasko;Password=Admin111;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+
+        public static object MessgeBox { get; private set; }
 
         static void Main()
         {
@@ -74,7 +80,7 @@ namespace mgrWebJob
             string OAuthNonce = oAuth.GenerateNonce();
             string tempOut1, tempOut2;
             Uri uri = new Uri("https://healthapi.garmin.com/wellness-api/rest/sleeps?uploadStartTimeInSeconds="
-                + 1528574400 + "&uploadEndTimeInSeconds=" + 1528617600);
+                + 1530784800 + "&uploadEndTimeInSeconds=" + 1530864000);
             string signature = oAuth.GenerateSignature(uri, CONSUMER_KEY, CONSUMER_SECRET,
                 USER_ACCESS_TOKEN, USER_ACCESS_TOKEN_SECRET, "GET", oAuthTimestamp, OAuthNonce,
                OAuthBase.SignatureTypes.HMACSHA1, out tempOut1, out tempOut2);
@@ -96,15 +102,42 @@ namespace mgrWebJob
 
             // Send request and get response
             var response = request.GetResponse();
-            string myJsonResponse = ""; //DISPOSE LATER ON
+            SleepSummary sleepSummary = new SleepSummary();
             using (System.IO.StreamReader sr = new System.IO.StreamReader(response.GetResponseStream()))
             {
-                myJsonResponse = sr.ReadToEnd();
+                string myJsonResponse = sr.ReadToEnd();
+
+                //Deserialize response and capture relevant data
+                var sleepSummaryJson = JsonConvert.DeserializeObject<JArray>(myJsonResponse).First.ToString();
+                sleepSummary = JsonConvert.DeserializeObject<SleepSummary>(sleepSummaryJson);
             }
 
-            //Deserialize response and capture relevant data
-            var sleepSummaryJson = JsonConvert.DeserializeObject<JArray>(myJsonResponse).First.ToString();
-            var sleepSummary = JsonConvert.DeserializeObject<sleepSummary>(sleepSummaryJson);
+            // Connect to Azure Database and save data
+            using (SqlConnection conn = new SqlConnection())
+            {
+                conn.ConnectionString = AZURE_DATABASE_CONN_STRING;
+                using (SqlCommand cmd = new SqlCommand())
+                {
+                    cmd.Connection = conn;
+                    cmd.CommandType = CommandType.Text;
+                    cmd.CommandText = @"INSERT INTO dbo.GarminData(Date, SleepDurationInSec, SleepDeepInSec, SleepLightInSec) VALUES (@date, @sleepDurationInSec, @sleepDeepInSec, @sleepLightInSec)";
+                    cmd.Parameters.AddWithValue("@date", DateTime.ParseExact(sleepSummary.calendarDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+                    cmd.Parameters.AddWithValue("@sleepDurationInSec", sleepSummary.durationInSeconds);
+                    cmd.Parameters.AddWithValue("@sleepDeepInSec", sleepSummary.deepSleepDurationInSeconds + sleepSummary.remSleepInSeconds);
+                    cmd.Parameters.AddWithValue("@sleepLightInSec", sleepSummary.lightSleepDurationInSeconds);
+
+                    try
+                    {
+                        conn.Open();
+                        cmd.ExecuteNonQuery();
+                        conn.Close();
+                    }
+                    catch (SqlException e)
+                    {
+                        Console.WriteLine(e.Message.ToString(), "Error Message");
+                    }
+                }
+            }
         }
     }
 }

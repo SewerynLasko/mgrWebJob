@@ -52,16 +52,22 @@ namespace mgrWebJob
 
                 //Deserialize response and capture relevant data
                 var activitySummaryJson = JsonConvert.DeserializeObject<JArray>(myJsonResponse).First.ToString();
-                activitySummary = JsonConvert.DeserializeObject<ActivitySummary>(activitySummaryJson);
+                if (activitySummaryJson != null)
+                {
+                    activitySummary = JsonConvert.DeserializeObject<ActivitySummary>(activitySummaryJson);
+                }
             }
 
-            SqlCommand cmd = new SqlCommand();
-            cmd.CommandText = @"INSERT INTO dbo.GarminData(BikingStartTime, BikingDurationInSec, BikingAvgHeartRate, BikingMaxHeartRate) VALUES (@bikingStartTime, @bikingDurationInSec, @bikingAvgHeartRate, @bikingMaxHeartRate)";
-            cmd.Parameters.AddWithValue("@bikingStartTime", UnixTimeStampToDateTime(activitySummary.startTimeInSeconds).ToString("HH:mm"));
-            cmd.Parameters.AddWithValue("@bikingDurationInSec", activitySummary.durationInSeconds);
-            cmd.Parameters.AddWithValue("@bikingAvgHeartRate", activitySummary.averageHeartRateInBeatsPerMinute);
-            cmd.Parameters.AddWithValue("@bikingMaxHeartRate", activitySummary.maxHeartRateInBeatsPerMinute);
-            executeNonQuery(cmd);
+            if (activitySummary != null)
+            {
+                SqlCommand cmd = new SqlCommand();
+                cmd.CommandText = @"INSERT INTO dbo.GarminData(BikingStartTime, BikingDurationInSec, BikingAvgHeartRate, BikingMaxHeartRate) VALUES (@bikingStartTime, @bikingDurationInSec, @bikingAvgHeartRate, @bikingMaxHeartRate)";
+                cmd.Parameters.AddWithValue("@bikingStartTime", UnixTimeStampToDateTime(activitySummary.startTimeInSeconds).ToString("HH:mm"));
+                cmd.Parameters.AddWithValue("@bikingDurationInSec", activitySummary.durationInSeconds);
+                cmd.Parameters.AddWithValue("@bikingAvgHeartRate", activitySummary.averageHeartRateInBeatsPerMinute);
+                cmd.Parameters.AddWithValue("@bikingMaxHeartRate", activitySummary.maxHeartRateInBeatsPerMinute);
+                executeNonQuery(cmd);
+            }
         }
 
         static void getAndSaveSleepData()
@@ -76,16 +82,22 @@ namespace mgrWebJob
 
                 //Deserialize response and capture relevant data
                 var sleepSummaryJson = JsonConvert.DeserializeObject<JArray>(myJsonResponse).First.ToString();
-                sleepSummary = JsonConvert.DeserializeObject<SleepSummary>(sleepSummaryJson);
+                if (sleepSummaryJson != null)
+                {
+                    sleepSummary = JsonConvert.DeserializeObject<SleepSummary>(sleepSummaryJson);
+                }
             }
 
-            SqlCommand cmd = new SqlCommand();
-            cmd.CommandText = @"INSERT INTO dbo.GarminData(Date, SleepDurationInSec, SleepDeepInSec, SleepLightInSec) VALUES (@date, @sleepDurationInSec, @sleepDeepInSec, @sleepLightInSec)";
-            cmd.Parameters.AddWithValue("@date", DateTime.ParseExact(sleepSummary.calendarDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
-            cmd.Parameters.AddWithValue("@sleepDurationInSec", sleepSummary.durationInSeconds);
-            cmd.Parameters.AddWithValue("@sleepDeepInSec", sleepSummary.deepSleepDurationInSeconds + sleepSummary.remSleepInSeconds);
-            cmd.Parameters.AddWithValue("@sleepLightInSec", sleepSummary.lightSleepDurationInSeconds);
-            executeNonQuery(cmd);
+            if (sleepSummary != null)
+            {
+                SqlCommand cmd = new SqlCommand();
+                cmd.CommandText = @"INSERT INTO dbo.GarminData(Date, SleepDurationInSec, SleepDeepInSec, SleepLightInSec) VALUES (@date, @sleepDurationInSec, @sleepDeepInSec, @sleepLightInSec)";
+                cmd.Parameters.AddWithValue("@date", DateTime.ParseExact(sleepSummary.calendarDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+                cmd.Parameters.AddWithValue("@sleepDurationInSec", sleepSummary.durationInSeconds);
+                cmd.Parameters.AddWithValue("@sleepDeepInSec", sleepSummary.deepSleepDurationInSeconds + sleepSummary.remSleepInSeconds);
+                cmd.Parameters.AddWithValue("@sleepLightInSec", sleepSummary.lightSleepDurationInSeconds);
+                executeNonQuery(cmd);
+            }
         }
 
         static void executeNonQuery(SqlCommand cmd)

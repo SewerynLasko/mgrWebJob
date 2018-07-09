@@ -32,12 +32,37 @@ namespace mgrWebJob
             }
 
             getDatesAndConvertToUnixTimestamp();
+            getAndSaveTemperature();
             //getAndSaveSleepData();
-            getAndSaveActivityData();
+            //getAndSaveActivityData();
 
             // var host = new JobHost(config);
             // The following code ensures that the WebJob will be running continuously
             //host.RunAndBlock();
+        }
+
+        static void getAndSaveTemperature()
+        {
+            string apiKey = "ec54c36691cff6d49cc39d7d5efa3707";
+            string city = "katowice";
+            string url = "http://api.openweathermap.org/data/2.5/weather?q=" + city + "&appid=" + apiKey;
+            var request = WebRequest.Create(url);
+            request.Method = "GET";
+            var response = request.GetResponse();
+            double temperatureInCelc = 0;
+            using (System.IO.StreamReader sr = new System.IO.StreamReader(response.GetResponseStream()))
+            {
+                string myJsonResponse = sr.ReadToEnd();
+                //Deserialize response and capture relevant data
+                RootObject temperatureJson = JsonConvert.DeserializeObject<RootObject>(myJsonResponse);
+                temperatureInCelc = Math.Round(temperatureJson.main.temp - 273.15);
+            }
+
+            SqlCommand cmd = new SqlCommand();
+            cmd.CommandText = @"INSERT INTO dbo.GarminData(Temperature, Date) VALUES (@temperatureInCelc, @date)";
+            cmd.Parameters.AddWithValue("@temperatureInCelc", temperatureInCelc);
+            cmd.Parameters.AddWithValue("@date", DateTime.UtcNow);
+            executeNonQuery(cmd);
         }
 
         static void getAndSaveActivityData()
@@ -91,8 +116,8 @@ namespace mgrWebJob
             if (sleepSummary != null)
             {
                 SqlCommand cmd = new SqlCommand();
-                cmd.CommandText = @"INSERT INTO dbo.GarminData(Date, SleepDurationInSec, SleepDeepInSec, SleepLightInSec) VALUES (@date, @sleepDurationInSec, @sleepDeepInSec, @sleepLightInSec)";
-                cmd.Parameters.AddWithValue("@date", DateTime.ParseExact(sleepSummary.calendarDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+                cmd.CommandText = @"INSERT INTO dbo.GarminData(SleepDate, SleepDurationInSec, SleepDeepInSec, SleepLightInSec) VALUES (@sleepDate, @sleepDurationInSec, @sleepDeepInSec, @sleepLightInSec)";
+                cmd.Parameters.AddWithValue("@sleepDate", DateTime.ParseExact(sleepSummary.calendarDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
                 cmd.Parameters.AddWithValue("@sleepDurationInSec", sleepSummary.durationInSeconds);
                 cmd.Parameters.AddWithValue("@sleepDeepInSec", sleepSummary.deepSleepDurationInSeconds + sleepSummary.remSleepInSeconds);
                 cmd.Parameters.AddWithValue("@sleepLightInSec", sleepSummary.lightSleepDurationInSeconds);
@@ -122,6 +147,34 @@ namespace mgrWebJob
 
                 cmd.Dispose();
             }
+        }
+
+        static int fetchLastRecordIdFromDatabase()
+        {
+            int maxId = 0;
+            SqlCommand cmd = new SqlCommand();
+            using (SqlConnection conn = new SqlConnection())
+            {
+                conn.ConnectionString = AZURE_DATABASE_CONN_STRING;
+                cmd.Connection = conn;
+                cmd.CommandType = CommandType.Text;
+                cmd.CommandText = "SELECT MAX(Id) FROM dbo.GarminData";
+
+                try
+                {
+                    conn.Open();
+                    maxId = Convert.ToInt32(cmd.ExecuteScalar());
+                    conn.Close();
+                }
+                catch (SqlException e)
+                {
+                    Console.WriteLine(e.Message.ToString(), "Error Message");
+                }
+
+                cmd.Dispose();
+            }
+
+            return maxId;
         }
 
         static WebRequest requestGenerator(string summaryType, int uploadStartTimeInSeconds, int uploadEndTimeInSeconds)

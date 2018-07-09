@@ -75,8 +75,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Engine\oauthbase.cs" />
-    <Compile Include="Model\rating.cs" />
-    <Compile Include="Model\temperature.cs" />
+    <Compile Include="Model\Temperature.cs" />
     <Compile Include="Model\ActivitySummary.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Engine\Functions.cs" />

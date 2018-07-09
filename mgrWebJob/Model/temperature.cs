@@ -2,14 +2,15 @@
 
 namespace mgrWebJob
 {
-    class temperature
+    public class Main
     {
-        [JsonProperty("temperatureCelc")]
-        public int temperatureCelc { get; set; }
+        [JsonProperty("temp")]
+        public double temp { get; set; }
+    }
 
-        public temperature()
-        {
-            temperatureCelc = 0;
-        }
+    public class RootObject
+    {
+        [JsonProperty("main")]
+        public Main main { get; set; }
     }
 }

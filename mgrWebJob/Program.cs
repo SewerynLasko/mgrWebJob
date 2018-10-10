@@ -19,9 +19,18 @@ namespace mgrWebJob
 
         public static string CONSUMER_KEY = "f8ee8fab-4916-4c0f-8137-abd8358dba65"; //APPLICATION_ID
         public static string CONSUMER_SECRET = "QicVJ03lzjkwXWDW7FyVpXijV6FNOYLnNRb"; //APPLICATION_PASSWORD
-        public static string USER_ACCESS_TOKEN = "a6352297-0593-49b9-ab13-5c3a29a50d6a"; //USER_TOKEN
-        public static string USER_ACCESS_TOKEN_SECRET = "iXzP9riRMnTRKmfAqD6XZUTDpJD6ulfOSj4"; // USER_TOKEN_PASSWORD
+        public static string USER_ACCESS_TOKEN = "5be4f65b-4a3e-4718-b967-aeba2e2c62b9"; //USER_TOKEN
+        public static string USER_ACCESS_TOKEN_SECRET = "itG28UlQTLc50FT8ttccuwcbZ93afVPzjJd"; // USER_TOKEN_PASSWORD
         public static string AZURE_DATABASE_CONN_STRING = "Server=tcp:mgrsewerynlaskodbserver.database.windows.net,1433;Initial Catalog=mgrsewerynlasko_db;Persist Security Info=False;User ID=mgrsewerynlasko;Password=Admin111;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+
+        // 0Auth variables
+        public static string OAUTH_CONSUMER_KEY = "f8ee8fab-4916-4c0f-8137-abd8358dba65";
+        public static string OAUTH_TOKEN = "5be4f65b-4a3e-4718-b967-aeba2e2c62b9";
+
+        public static TemperatureSummary temperatureSummary;
+        public static ActivitySummary activitySummary;
+        public static SleepSummary sleepSummary;
+
 
         static void Main()
         {
@@ -32,16 +41,45 @@ namespace mgrWebJob
             }
 
             getDatesAndConvertToUnixTimestamp();
-            getAndSaveTemperature();
-            //getAndSaveSleepData();
-            //getAndSaveActivityData();
-
-            // var host = new JobHost(config);
-            // The following code ensures that the WebJob will be running continuously
-            //host.RunAndBlock();
+            getTemperature();
+            getSleepData();
+            getActivityData();
+            saveData();
         }
 
-        static void getAndSaveTemperature()
+        static void saveData()
+        {
+            if (activitySummary != null && sleepSummary != null && temperatureSummary != null)
+            {
+                SqlCommand cmd = new SqlCommand();
+                cmd.CommandText = @"INSERT INTO dbo.GarminData(BikingStartTime, BikingDurationInSec, BikingAvgHeartRate, BikingMaxHeartRate, Temperature, Date, SleepDate, SleepDurationInSec, SleepDeepInSec, SleepLightInSec, Pressure, Humidity, Visibility, WindSpeed, WindDeg, Clouds, Sunrise, Sunset) VALUES (@bikingStartTime, @bikingDurationInSec, @bikingAvgHeartRate, @bikingMaxHeartRate, @temperatureInCelc, @date, @sleepDate, @sleepDurationInSec, @sleepDeepInSec, @sleepLightInSec, @pressure, @humidity, @visibility, @windSpeed, @windDeg, @clouds, @sunrise, @sunset)";
+                cmd.Parameters.AddWithValue("@bikingStartTime", UnixTimeStampToDateTime(activitySummary.startTimeInSeconds).ToString("HH:mm"));
+                cmd.Parameters.AddWithValue("@bikingDurationInSec", activitySummary.durationInSeconds);
+                cmd.Parameters.AddWithValue("@bikingAvgHeartRate", activitySummary.averageHeartRateInBeatsPerMinute);
+                cmd.Parameters.AddWithValue("@bikingMaxHeartRate", activitySummary.maxHeartRateInBeatsPerMinute);
+
+                cmd.Parameters.AddWithValue("@sleepDate", DateTime.ParseExact(sleepSummary.calendarDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+                cmd.Parameters.AddWithValue("@sleepDurationInSec", sleepSummary.durationInSeconds);
+                cmd.Parameters.AddWithValue("@sleepDeepInSec", sleepSummary.deepSleepDurationInSeconds + sleepSummary.remSleepInSeconds);
+                cmd.Parameters.AddWithValue("@sleepLightInSec", sleepSummary.lightSleepDurationInSeconds);
+
+                cmd.Parameters.AddWithValue("@date", DateTime.UtcNow);
+
+                cmd.Parameters.AddWithValue("@temperatureInCelc", Math.Round(temperatureSummary.main.temp - 273.15));
+                cmd.Parameters.AddWithValue("@pressure", temperatureSummary.main.pressure);
+                cmd.Parameters.AddWithValue("@humidity", temperatureSummary.main.humidity);
+                cmd.Parameters.AddWithValue("@visibility", temperatureSummary.visibility);
+                cmd.Parameters.AddWithValue("@windSpeed", temperatureSummary.wind.speed);
+                cmd.Parameters.AddWithValue("@windDeg", temperatureSummary.wind.deg);
+                cmd.Parameters.AddWithValue("@clouds", temperatureSummary.clouds.all);
+                cmd.Parameters.AddWithValue("@sunrise", temperatureSummary.sys.sunrise);
+                cmd.Parameters.AddWithValue("@sunset", temperatureSummary.sys.sunset);
+
+                executeNonQuery(cmd);
+            }
+        }
+
+        static void getTemperature()
         {
             string apiKey = "ec54c36691cff6d49cc39d7d5efa3707";
             string city = "katowice";
@@ -49,28 +87,20 @@ namespace mgrWebJob
             var request = WebRequest.Create(url);
             request.Method = "GET";
             var response = request.GetResponse();
-            double temperatureInCelc = 0;
             using (System.IO.StreamReader sr = new System.IO.StreamReader(response.GetResponseStream()))
             {
                 string myJsonResponse = sr.ReadToEnd();
                 //Deserialize response and capture relevant data
-                RootObject temperatureJson = JsonConvert.DeserializeObject<RootObject>(myJsonResponse);
-                temperatureInCelc = Math.Round(temperatureJson.main.temp - 273.15);
+                temperatureSummary = JsonConvert.DeserializeObject<TemperatureSummary>(myJsonResponse);
             }
-
-            SqlCommand cmd = new SqlCommand();
-            cmd.CommandText = @"INSERT INTO dbo.GarminData(Temperature, Date) VALUES (@temperatureInCelc, @date)";
-            cmd.Parameters.AddWithValue("@temperatureInCelc", temperatureInCelc);
-            cmd.Parameters.AddWithValue("@date", DateTime.UtcNow);
-            executeNonQuery(cmd);
         }
 
-        static void getAndSaveActivityData()
+        static void getActivityData()
         {
             WebRequest request = requestGenerator("activities", 1530594000, 1530648000);
             // Send request and get response
             var response = request.GetResponse();
-            ActivitySummary activitySummary = new ActivitySummary();
+            activitySummary = new ActivitySummary();
             using (System.IO.StreamReader sr = new System.IO.StreamReader(response.GetResponseStream()))
             {
                 string myJsonResponse = sr.ReadToEnd();
@@ -82,25 +112,14 @@ namespace mgrWebJob
                     activitySummary = JsonConvert.DeserializeObject<ActivitySummary>(activitySummaryJson);
                 }
             }
-
-            if (activitySummary != null)
-            {
-                SqlCommand cmd = new SqlCommand();
-                cmd.CommandText = @"INSERT INTO dbo.GarminData(BikingStartTime, BikingDurationInSec, BikingAvgHeartRate, BikingMaxHeartRate) VALUES (@bikingStartTime, @bikingDurationInSec, @bikingAvgHeartRate, @bikingMaxHeartRate)";
-                cmd.Parameters.AddWithValue("@bikingStartTime", UnixTimeStampToDateTime(activitySummary.startTimeInSeconds).ToString("HH:mm"));
-                cmd.Parameters.AddWithValue("@bikingDurationInSec", activitySummary.durationInSeconds);
-                cmd.Parameters.AddWithValue("@bikingAvgHeartRate", activitySummary.averageHeartRateInBeatsPerMinute);
-                cmd.Parameters.AddWithValue("@bikingMaxHeartRate", activitySummary.maxHeartRateInBeatsPerMinute);
-                executeNonQuery(cmd);
-            }
         }
 
-        static void getAndSaveSleepData()
+        static void getSleepData()
         {
-            WebRequest request = requestGenerator("sleeps", 1530784800, 1530864000);
+            WebRequest request = requestGenerator("sleeps", 1539162000, 1539201600);
             // Send request and get response
             var response = request.GetResponse();
-            SleepSummary sleepSummary = new SleepSummary();
+            sleepSummary = new SleepSummary();
             using (System.IO.StreamReader sr = new System.IO.StreamReader(response.GetResponseStream()))
             {
                 string myJsonResponse = sr.ReadToEnd();
@@ -111,17 +130,6 @@ namespace mgrWebJob
                 {
                     sleepSummary = JsonConvert.DeserializeObject<SleepSummary>(sleepSummaryJson);
                 }
-            }
-
-            if (sleepSummary != null)
-            {
-                SqlCommand cmd = new SqlCommand();
-                cmd.CommandText = @"INSERT INTO dbo.GarminData(SleepDate, SleepDurationInSec, SleepDeepInSec, SleepLightInSec) VALUES (@sleepDate, @sleepDurationInSec, @sleepDeepInSec, @sleepLightInSec)";
-                cmd.Parameters.AddWithValue("@sleepDate", DateTime.ParseExact(sleepSummary.calendarDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
-                cmd.Parameters.AddWithValue("@sleepDurationInSec", sleepSummary.durationInSeconds);
-                cmd.Parameters.AddWithValue("@sleepDeepInSec", sleepSummary.deepSleepDurationInSeconds + sleepSummary.remSleepInSeconds);
-                cmd.Parameters.AddWithValue("@sleepLightInSec", sleepSummary.lightSleepDurationInSeconds);
-                executeNonQuery(cmd);
             }
         }
 
@@ -196,8 +204,8 @@ namespace mgrWebJob
             request.Method = "GET";
             request.ContentType = "application/json; charset=utf-8";
             string auth = "OAuth " +
-               "oauth_consumer_key=\"f8ee8fab-4916-4c0f-8137-abd8358dba65\"," +
-               "oauth_token=\"a6352297-0593-49b9-ab13-5c3a29a50d6a\"," +
+               "oauth_consumer_key=" + OAUTH_CONSUMER_KEY + "," +
+               "oauth_token=" + OAUTH_TOKEN +"," +
                "oauth_signature_method=\"HMAC-SHA1\"," +
                "oauth_timestamp=" + oAuthTimestamp + "," +
                "oauth_nonce=" + OAuthNonce + "," +
